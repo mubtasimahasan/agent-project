@@ -3,10 +3,8 @@ from IPython.display import display
 
 def load_and_process_dataset(name):
     dataset = load_dataset(name)
-
-    # reduce data for debugging
-    dataset = dataset['validation'].select(range(int(len(dataset['validation']) * 0.437)))
-
+    dataset = dataset['validation']
+    
     return dataset
 
 def get_samples(dataset, show=True):

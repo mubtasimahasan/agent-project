@@ -2,6 +2,8 @@ from tqdm import tqdm
 from bert_score import score
 from moverscore_v2 import word_mover_score
 from collections import defaultdict
+import random
+import json
 
 def evaluate_pipeline(dataset, pipeline):
     total_questions = 0
@@ -11,15 +13,19 @@ def evaluate_pipeline(dataset, pipeline):
     da_indirect_count = 0
     total_bert_score = 0
     total_mover_score = 0
+    predictions = {}
 
     for data in tqdm(dataset, desc="Evaluating", unit="sample", leave=False):
         image = data['image']
+        question_id = data['question_id']
         question = data['question']
         choices = data['choices']
         true_mc_answer = data['choices'][data['correct_choice_idx']]
         true_da_answers = eval(data['direct_answers'])
         
-        print("*" * 79)
+        print("@" * 79)
+        print("A-OKVQA question_id:", question_id)
+        print("@" * 79)
         # Get the pipeline results
         tool_results, mc_answer, da_answer = pipeline(question, image, choices)
         
@@ -30,6 +36,12 @@ def evaluate_pipeline(dataset, pipeline):
         print(f'True Multiple Choice Answer: {true_mc_answer}')
         print(f'True Direct Answer: {true_da_answers}')
         print("-" * 79)
+
+        # Save predictions
+        predictions[question_id] = {
+            'multiple_choice': mc_answer,
+            'direct_answer': da_answer
+        }
 
         # calculate Multiple Choice accuracy
         if true_mc_answer in mc_answer:
@@ -63,8 +75,7 @@ def evaluate_pipeline(dataset, pipeline):
         print(f'MoverScore: {mover_score_val:.4f}')
         
         total_questions += 1
-        print("*" * 79)
-
+        
     # Calculate overall accuracy
     overall_mc_accuracy = (mc_exact_count + mc_indirect_count) / total_questions
     overall_da_accuracy = (da_exact_count + da_indirect_count) / total_questions
@@ -78,3 +89,19 @@ def evaluate_pipeline(dataset, pipeline):
     print(f"Average Direct Answer BERTScore: {average_bert_score:.4f}")
     print(f"Average Direct Answer MoverScore: {average_mover_score:.4f}")
     print("=" * 79)
+
+    filename = str(pipeline)[10:].split(' at')[0]
+    random_number = random.randint(1, 1000000)
+    
+    # Save predictions in json file
+    json_data = json.dumps(predictions, indent=4)
+    with open(f"./logs/predictions_val_{filename}_{random_number}.json", "w") as f:
+        f.write(json_data)
+
+    # Save results to a file
+    with open(f"./logs/results_{filename}_{random_number}.txt", "w") as f:
+        f.write(f"Overall Multiple Choice Accuracy: {overall_mc_accuracy:.2f} ({(mc_exact_count / total_questions):.2f} exact + {(mc_indirect_count / total_questions):.2f} indirect)\n")
+        f.write(f"Overall Direct Answer Accuracy: {overall_da_accuracy:.2f} ({(da_exact_count / total_questions):.2f} exact + {(da_indirect_count / total_questions):.2f} indirect)\n")
+        f.write(f"Average Direct Answer BERTScore: {average_bert_score:.4f}\n")
+        f.write(f"Average Direct Answer MoverScore: {average_mover_score:.4f}\n")
+        
