@@ -14,14 +14,27 @@ if [ $# -gt 0 ]; then
         echo "Valid options are: static, dynamic, no_plan, or debug."
         exit 1
     fi
+
+    # If 'debug' is selected and a second argument is present, pass it
+    if [[ "$pipeline_choice" == "debug" && $# -gt 1 ]]; then
+        debug_value=$2
+        python_args="$pipeline_choice $debug_value"
+    else
+        python_args="$pipeline_choice"
+    fi
 else
     # Default behavior if no choice is provided
-    echo "No pipeline choice provided. Evaluting on all pipelines."
+    echo "No pipeline choice provided. Evaluating on all pipelines."
     pipeline_choice="all"
+    python_args="$pipeline_choice"
 fi
 
-# Execute the Python script with the chosen pipeline
-echo "Executing: python main.py $pipeline_choice"
-python main.py "$pipeline_choice" >> ./logs/output.log
+# Get date time and construct the log file name
+date_time=$(date +"%m%d-%H%M")
+log_file="./logs/outputs_${date_time}.log"
 
-echo "Pipeline evaluation complete. Results appended to ./logs/output.log."
+# Execute the Python script with the chosen arguments
+echo "Executing: python main.py $python_args"
+python main.py $python_args >> "$log_file"
+
+echo "Pipeline evaluation complete. Logs saved to ./logs directory."

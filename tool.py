@@ -20,7 +20,7 @@ class ImageCaptionTool:
         
     def execute(self, image):
         inputs = self.processor(images=image, return_tensors="pt")
-        out = self.model.generate(**inputs, max_new_tokens=50)
+        out = self.model.generate(**inputs, max_new_tokens=100)
         caption = self.processor.decode(out[0], skip_special_tokens=True)
         return caption
 
@@ -223,7 +223,7 @@ class ContextReasoningTool:
         Answer:
         '''
         inputs = self.processor(images=image, text=prompt, return_tensors="pt")
-        outputs = self.model.generate(**inputs, max_new_tokens=5)
+        outputs = self.model.generate(**inputs, max_new_tokens=50)
         answer = self.processor.decode(outputs[0], skip_special_tokens=True)
         return answer
 
@@ -321,7 +321,7 @@ class KnowledgeReasoningTool:
         New Answer:
         """
         inputs = self.vlm_processor(images=image, text=prompt, return_tensors="pt")
-        outputs = self.vlm_model.generate(**inputs, max_new_tokens=5)
+        outputs = self.vlm_model.generate(**inputs, max_new_tokens=50)
         generated_text = self.vlm_processor.decode(outputs[0], skip_special_tokens=True)
         answer = generated_text.split("New Answer:")[-1].strip()
         return answer

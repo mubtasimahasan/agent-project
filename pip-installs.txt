@@ -13,5 +13,6 @@ pip install easyocr==1.7.1
 pip install bert-score==0.3.13 
 pip install pyemd==1.00
 pip install git+https://github.com/KennyNg-19/emnlp19-moverscore.git
-
+pip install sentence-transformers==3.0.1
+ 
 python -m spacy download en_core_web_sm

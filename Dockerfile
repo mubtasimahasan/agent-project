@@ -16,9 +16,10 @@ RUN pip install \
     beautifulsoup4==4.12.3 \
     accelerate==0.25.0 \
     easyocr==1.7.1 \
-    bert-score==0.3.13 \
     pyemd==1.00 \
     ipython==8.26.0 \
+    sentence-transformers==3.0.1 \
+    bert-score==0.3.13 \
     git+https://github.com/KennyNg-19/emnlp19-moverscore.git
 
 # Download the spaCy model

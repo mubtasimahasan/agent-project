@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, LlavaForConditionalGeneration, AutoModelForCausalLM, AutoTokenizer, Blip2Processor, Blip2ForConditionalGeneration, DetrImageProcessor, DetrForObjectDetection
+from transformers import AutoProcessor, LlavaForConditionalGeneration, AutoModelForCausalLM, AutoTokenizer
 # from transformers import BitsAndBytesConfig
 # import torch
 
@@ -8,9 +8,9 @@ from transformers import AutoProcessor, LlavaForConditionalGeneration, AutoModel
 # )
     
 def initialize_llava():
-    llava_processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
-    llava_model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf", device_map="auto")
     # llava_model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf", device_map="auto", quantization_config=quantization_config)
+    llava_model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf", device_map="auto")
+    llava_processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
     return llava_processor, llava_model
 
 def initialize_mistral():

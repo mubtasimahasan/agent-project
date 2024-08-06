@@ -1,7 +1,7 @@
-from dataset import load_and_process_dataset, get_samples
 from pipeline import static_pipeline, dynamic_pipeline, noplan_pipeline
 from utility import evaluate_pipeline
 
+from datasets import load_dataset
 import argparse
 import os
 import warnings
@@ -11,11 +11,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate different pipelines on the dataset.")
     parser.add_argument("pipeline", type=str, choices=["static", "dynamic", "no_plan", "all", "debug"],
                         help="Choose which pipeline to evaluate: static, dynamic, no_plan, all, or debug.")
+    parser.add_argument("portion", type=float, nargs='?', default=0.010,
+                        help="Portion of dataset to use for the debug pipeline.")
     
     args = parser.parse_args()
     
-    print("\/" * 150)
-
     # Stop annoying warnings [run with caution]
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     warnings.simplefilter('ignore')
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     logging.getLogger("bert_score").setLevel(logging.ERROR)
     
     # Load Dataset
-    dataset = load_and_process_dataset("HuggingFaceM4/A-OKVQA")
+    dataset = load_dataset("HuggingFaceM4/A-OKVQA", split='validation')
     print(dataset)
 
     # Execute Pipeline Evaluation based on the choice
@@ -51,20 +51,17 @@ if __name__ == "__main__":
         evaluate_pipeline(dataset, noplan_pipeline)
     
     elif args.pipeline == "debug":
-        print("Debugging pipelines on three sample data...")
-        sample_x, sample_y, sample_z = get_samples(dataset)
-
-        tool_results, mc_answer, da_answer = static_pipeline(sample_z['question'], sample_z['image'], sample_z['choices'])
-        print("Multiple Choice Answer: \n", mc_answer)
-        print("Direct Answer: \n", da_answer)
+        # reduce data for debugging
+        dataset = dataset.select(range(int(len(dataset) * args.portion)))
         
-        tool_results, mc_answer, da_answer = dynamic_pipeline(sample_z['question'], sample_z['image'], sample_z['choices'])
-        print("Multiple Choice Answer: \n", mc_answer)
-        print("Direct Answer: \n", da_answer)
+        print("Debugging static pipeline on three sample data...")
+        evaluate_pipeline(dataset, static_pipeline)
         
-        tool_results, mc_answer, da_answer = noplan_pipeline(sample_z['question'], sample_z['image'], sample_z['choices'])
-        print("Multiple Choice Answer: \n", mc_answer)
-        print("Direct Answer: \n", da_answer)
+        print("Debugging dynamic pipeline on three sample data...")
+        evaluate_pipeline(dataset, dynamic_pipeline)
+        
+        print("Debugging noplan pipeline on three sample data...")
+        evaluate_pipeline(dataset, noplan_pipeline)
 
     
 

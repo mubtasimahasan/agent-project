@@ -1,3 +1,5 @@
+from utility import map_text_to_choices
+
 from PIL import Image
 import re 
 
@@ -49,9 +51,9 @@ class Planner:
         inputs = self.processor(plan_prompt, image, padding=True, return_tensors="pt").to("cuda")
         output = self.model.generate(**inputs, max_new_tokens=30, do_sample=True, temperature=0.9)
         generated_text = self.processor.batch_decode(output, skip_special_tokens=True)[0]
-        #print("Full interaction with planner:", generated_text)
+        # print("Full interaction with planner:", generated_text)
         generated_text = generated_text.split("ASSISTANT:")[-1].strip()
-        #print("Planner Reply:", generated_text)
+        # print("Planner Reply:", generated_text)
         selected_tools = []
         for tool_name in self.tools:
             if tool_name in generated_text:
@@ -64,7 +66,7 @@ class Planner:
                 print("Planner failed to select any tools after maximum retries. Selecting all tools.")
                 selected_tools = list(self.tools.keys())
         
-        print(f"Selected Tools by Planner: {'~' * 30} \n {selected_tools}")
+        print(f"{'~' * 26} Selected Tools by Planner: {'~' * 25} \n {selected_tools}")
         return selected_tools
 
 class Executor:
@@ -96,7 +98,7 @@ class Executor:
             if tool_name not in self.tools:
                 print(f"Warning: Unknown tool name: {tool_name}")
         
-        print(f"Tools Output: {'=' * 30} \n {results}")
+        print(f"{'=' * 33} Tools Output: {'=' * 31} \n {results}")
         return results
 
 class Answerer:
@@ -104,104 +106,127 @@ class Answerer:
         self.tokenizer = tokenizer
         self.model = model
 
-    def multiple_choice_answer(self, question, image, results, choices):
-        answer_prompt = f"""
-        You are an advanced visual question answering tool.
-
-        Task: 
-        - Use previous tool outputs to determine the one-word answer to the question.
-        - Your response must be exactly one word from the provided choices.
-        - If the tools' outputs don't directly indicate the answer, select an answer randomly from the choices.
-   
-        Example:
+    def multiple_choice_answer(self, question, results, choices):
+        answer_prompt = f"""You are an advanced visual question-answering tool. Choose the correct answer from the choices based on the tool outputs.  If the tool outputs do not provide enough information, select an answer randomly from the choices.
+        
+        Example 1:
         <s>[INST]
         Previous Tool Outputs: {{'TextDetectionTool': 'J,2 [H] 100-0237', 'ContextReasoningTool': 'frosting'}}
         Question: What is the topping on the cake?
-        Choices: icing, sprinkles, candles
+        Choices: ['butter', 'mayo', 'ice cream', 'icing']
         Answer: icing
         [/INST]</s>
-
+        
+        Example 2:
+        <s>[INST]
+        Previous Tool Outputs: {{'ObjectDetectionTool': {{'detected_objects': ['person', 'cell phone', 'person', 'person', 'motorcycle', 'car'], 'object_counts': {{'person': 3, 'cell phone': 1, 'motorcycle': 1, 'car': 1}}, 'TextDetectionTool': 'No text detected', 'ContextReasoningTool': 'a cigar'}}
+        Question: What is in the motorcyclist's mouth?
+        Choices: ['toothpick', 'food', 'popsicle stick', 'cigarette']
+        Answer: cigarette
+        [/INST]</s>
+        
+        Current task:
         [INST]
         Previous Tool Outputs: {results}
         Question: {question}
         Choices: {choices}
-        Answer: 
+        Answer: ?
         [/INST]
         """
         
         inputs = self.tokenizer(answer_prompt, return_tensors="pt").to("cuda")
-        output = self.model.generate(**inputs, max_new_tokens=3, pad_token_id=self.tokenizer.eos_token_id)
+        output = self.model.generate(**inputs, max_new_tokens=100, pad_token_id=self.tokenizer.eos_token_id)
         decoded_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
-        answer = decoded_text.split("Answer: ?")[-1].split("[/INST]")[-1].strip()
+        answer_text = decoded_text.split("Answer: ?")[-1].split("[/INST]")[-1].strip()
+        # print("Answerer Reply:", answer_text)
+        answer = map_text_to_choices(answer_text, choices)
+        #print(f"{'+' * 22} Predicted Multiple Choice Answer: {'+' * 22} \n {answer}")
         return answer
     
-    def direct_answer(self, question, image, results):
-        answer_prompt = f"""
-        You are an advanced visual question answering tool.
+    def direct_answer(self, question, results):
+        answer_prompt = f"""You are an advanced visual question-answering tool. 
+        
+        Your task:
+        - Provide a concise answer (one or two words) based on the tool outputs. 
+        - If the tool outputs do not provide enough information, guess a probable answer.
+        - You must give only the answer and do not include additional context or explanation.
 
-        Task: 
-        - Use previous tool outputs to predict the one-word answer to the question.
-        - Your response must be exactly one word.
-        - If the tools' outputs don't directly indicate the answer, guess a probable answer to the question.
-
-        Example:
+        Example 1:
         <s>[INST]
         Previous Tool Outputs: {{'TextDetectionTool': 'J,2 [H] 100-0237', 'ContextReasoningTool': 'frosting'}}
         Question: What is the topping on the cake?
         Answer: icing
         [/INST]</s>
-
+        
+        Example 2:
+        <s>[INST]
+        Previous Tool Outputs: {{'ObjectDetectionTool': {{'detected_objects': ['person', 'cell phone', 'person', 'person', 'motorcycle', 'car'], 'object_counts': {{'person': 3, 'cell phone': 1, 'motorcycle': 1, 'car': 1}}, 'TextDetectionTool': 'No text detected', 'ContextReasoningTool': 'a cigar'}}
+        Question: What is in the motorcyclist's mouth?
+        Answer: cigarette
+        [/INST]</s>
+        
+        Current task:
         [INST]
         Previous Tool Outputs: {results}
         Question: {question}
-        Answer: 
+        Answer (one or two words): 
         [/INST]
         """
         
         inputs = self.tokenizer(answer_prompt, return_tensors="pt").to("cuda")
-        output = self.model.generate(**inputs, max_new_tokens=3, pad_token_id=self.tokenizer.eos_token_id)
+        output = self.model.generate(**inputs, max_new_tokens=10, 
+                                     pad_token_id=self.tokenizer.eos_token_id,
+                                     do_sample=True,
+                                     temperature=0.5,
+                                     top_k=10)
         decoded_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
-        answer = decoded_text.split("Answer: ?")[-1].split("[/INST]")[-1].strip()
+        answer = decoded_text.split("Answer (one or two words):")[-1].split("[/INST]")[-1].strip()
+        #print(f"{'^' * 26} Predicted Direct Answer: {'^' * 27} \n {answer}")
         return answer
     
-# Evaluator Class
 class Evaluator:
     def __init__(self, tokenizer, model):
         self.model = model
         self.tokenizer = tokenizer
 
-    def evaluate(self, question, tool_outputs):
+    def evaluate(self, question, tool_outputs, mc_answer, da_answer):
         eval_prompt = f'''
         USER:
-        You are an evaluation agent designed to assess the relevance and accuracy of outputs produced by various tools in answering a given question based on an image. Your task is to analyze the tools' outputs, evaluate their usefulness in the context of the question, and provide feedback to guide the planning agent. 
-
+        You are an evaluation agent expert in analyzing various tools' outputs, the predicted multiple choice answer, and the direct answer, evaluating their usefulness in the context of the question, and providing a decision and score to guide the planning agent. 
+        
         Your tasks:
-        1. Evaluate whether the output from the specified tools is meaningful and relevant to the question.
+        1. Evaluate whether the output from the specified tools and the answer is meaningful and relevant to the question.
         2. Provide a decision on whether to continue with the current plan or regenerate the plan.
-        3. Provide a score (0-10) indicating how well the tools' outputs answer the question.
+        3. Provide a score (0-10) indicating how well the tools' outputs and the answer address the question.
 
         Example 1:
         <s>[INST]
-        Question: What is in the motorcyclist's mouth?
-        Tools' Output: {{'TextDetectionTool': 'No text detected', 'ContextReasoningTool': 'a cigar'}}
-        Evaluation: Based on the ContextReasoningTool output, the correct answer is inferable, even though the TextDetectionTool did not detect any text. 
+        Question: What best describes the pool of water?
+        Tools' Outputs: {{'ImageCaptionTool': 'a group of giraffes standing under a tree', 'TextDetectionTool': 'No text detected', 'KnowledgeReasoningTool': 'a pond'}}
+        Multiple Choice Answer: dirty
+        Direct Answer: pond
+        Evaluation: Here, the Tools' Outputs provide enough information and the Answer is relevant to the question. 
         Decision: Continue
         Score: 8
         [/INST]</s>
         
         Example 2:
         <s>[INST]
-        Question: What best describes the pool of water?
-        Tools' Outputs: {{'ImageCaptionTool': 'two gis are standing near a tree', 'TextDetectionTool': 'No text detected'}}
-        Evaluation: None of the provided choices match the previous tool outputs or contain enough information to infer the answer from the choices.
+        Question: Which number birthday is probably being celebrated?
+        Tools' Outputs: { {'TextDetectionTool': 'No text detected', 'ImageClassificationTool': 'quill'}}
+        Multiple Choice Answer: fifty
+        Direct Answer: Based on the tool outputs, there is
+        Evaluation: Here, None of the Tools' Outputs provide enough information and the Answer is irrelevant to the question. 
         Decision: Regenerate
-        Score: 3
+        Score: 2
         [/INST]</s>
         
         Current Task:
         [INST]
         Question: {question}
-        Tool Outputs: {tool_outputs}
+        Tools' Outputs: {tool_outputs}
+        Multiple Choice Answer: {mc_answer}
+        Direct Answer: {da_answer}
         Evaluation: ?
         Decision: ?
         Score: ?
@@ -216,10 +241,9 @@ class Evaluator:
         score = re.search(r".*(\d+)", evaluation_text).group(1) if re.search(r".*(\d+)", evaluation_text) else -1
         #print("Score:", score)
         #print(f"Evaluator Full Reply: {'>' * 30} \n {evaluation_text}")
-        print(f"Evaluator Reply: {'#' * 30} \n Decision: {decision}, Score: {score}")
+        print(f"{'#' * 29} Evaluator Reply: {'#' * 29} \n Decision: {decision}, Score: {score}")
         return decision, score
     
-# Replanner Class
 class Replanner(Planner):
     def plan(self, question, image, previous_tools, previous_score, retry_count=10):
         replan_prompt = f'''
@@ -284,6 +308,5 @@ class Replanner(Planner):
                 print("Replanner failed to select any tools after maximum retries. Selecting all tools.")
                 selected_tools = list(self.tools.keys())
         
-        print(f"Selected Tools by Replanner: {'<' * 30} \n {selected_tools}")
-        return selected_tools
-        
+        print(f"{'<' * 24} Selected Tools by Re-Planner: {'>' * 24} \n {selected_tools}")
+        return selected_tools        
